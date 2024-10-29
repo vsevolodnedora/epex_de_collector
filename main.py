@@ -61,7 +61,7 @@ def fetch_spot_data(date_str:str, url:str) -> pd.DataFrame:
         print(f"DATA NOT FOUND FOR: {url}")
         return pd.DataFrame()
 
-    print(f"Data size {len(data_frame)}")
+    # print(f"Data size {len(data_frame)}")
 
     # Display the DataFrame
     data_frame = pd.DataFrame(data_frame)
@@ -72,10 +72,21 @@ def fetch_spot_data(date_str:str, url:str) -> pd.DataFrame:
     elif len(data_frame) == 72:
         # get hourly data (skip 30 min intervals)
         data_frame_lim = data_frame.iloc[::3]
+    elif len(data_frame) == 74:
+        # get hourly data (skip 30 min intervals)
+        print(f'WARNING data length ({len(data_frame)}) suggests Long Clock Change Day with 25 hours. Collection might be erroneous')
+        data_frame_lim = data_frame.iloc[::3]
+        data_frame_lim = data_frame_lim.iloc[:24]  # Adjust to include 25 hours for the day
     elif len(data_frame) == 24:
         # get hourly data (skip 1 hour intervals)
         data_frame_lim = data_frame
         pass
+    elif len(data_frame) == 172 or len(data_frame) == 174:
+        # Special handling for "Long Clock Change Day" (skip 15 min intervals but account for extra hour)
+        print(f'WARNING data length ({len(data_frame)}) suggests Long Clock Change Day with 25 hours. Collection might be erroneous')
+        data_frame_lim = data_frame.iloc[::7]
+        # data_frame_lim = data_frame_lim.iloc[:25]  # Adjust to include 25 hours for the day
+        data_frame_lim = data_frame_lim.iloc[:24]  # Adjust to include 25 hours for the day
     else:
         raise ValueError(f"Data size {len(data_frame)} not supported (see 168 for 15min and 72 for 30min)")
 
@@ -182,17 +193,10 @@ def fetch_auction_data(delivery_date_str:str, url:str) -> pd.DataFrame:
         data_frame[col] = data_frame[col].str.replace(',', '').astype(float)
 
     # Display the DataFrame
-    # data_frame = pd.DataFrame(data_frame)
-    # print(data_frame)
     if len(data_frame) == 0:
         print(f"DATA NOT FOUND FOR: {url}")
         return pd.DataFrame()
         # elif len(data_frame) == 168:
-    #     # get hourly data (skip 15 min intervals)
-    #     data_frame_lim = data_frame.iloc[::7]
-    # elif len(data_frame) == 72:
-    #     # get hourly data (skip 30 min intervals)
-    #     data_frame_lim = data_frame.iloc[::3]
     elif len(data_frame) == 12:
         # get hourly data (skip 1 hour intervals)
         print(f"Data size {len(data_frame)} (assuming hourly interval starting at 12.00")
@@ -208,11 +212,19 @@ def fetch_auction_data(delivery_date_str:str, url:str) -> pd.DataFrame:
         # get hourly data (skip 30 min intervals)
         data_frame_lim = data_frame
         data_frame_lim.index = get_time_axis_30min(delivery_date_str)
-    #     pass
+    elif len(data_frame) == 50:
+        print(f"WARNING Data size {len(data_frame)} (assuming half-hourly interval starting at 12.00 with extra hour")
+        # get hourly data (skip 30 min intervals)
+        data_frame_lim = data_frame[:48]
+        data_frame_lim.index = get_time_axis_30min(delivery_date_str)
     elif len(data_frame) == 96:
         print(f"Data size {len(data_frame)} (assuming quarter-hourly interval starting at 12.00")
         # get hourly data (skip 15 min intervals)
         data_frame_lim = data_frame
+        data_frame_lim.index = get_time_axis_15min(delivery_date_str)
+    elif len(data_frame) == 100:
+        print(f"WARNING Data size {len(data_frame)} (assuming quarter-hourly interval starting at 12.00 but with extra hour")
+        data_frame_lim = data_frame[:96]
         data_frame_lim.index = get_time_axis_15min(delivery_date_str)
     else:
         raise ValueError(f"Data size {len(data_frame)} not supported (see 96 for 15min and 24 for 1hour)")
@@ -252,7 +264,7 @@ def collect_continuous_market_data(start_date, end_date):
 
         for date in pd.date_range(start=start_date, end=end_date):
             date_str = date.strftime("%Y-%m-%d")
-            print(date_str)
+            print(f"{market_type} | {market_area} | {date_str}")
 
             url = f"https://www.epexspot.com/en/market-data?market_area={market_area}&auction=&trading_date=&delivery_date={date_str}&underlying_year=&modality=Continuous&sub_modality=&technology=&data_mode=table&period=&production_period=&product=60"
 
@@ -291,7 +303,7 @@ def collect_auction_market_data(start_date, end_date, sub_modality='DayAhead', a
 
             trading_date_str = trading_date.strftime("%Y-%m-%d")
             delivery_date_str = delivery_date.strftime("%Y-%m-%d")
-            print(f'{trading_date_str} -> {delivery_date_str}')
+            print(f'auction {sub_modality} | {market_area} | {date} | {trading_date_str} -> {delivery_date_str}')
 
             url = f"https://www.epexspot.com/en/market-data?market_area={market_area}&auction={auction}&trading_date={trading_date_str}&delivery_date={delivery_date_str}&underlying_year=&modality=Auction&sub_modality={sub_modality}&technology=&data_mode=table&period=&production_period="
 
