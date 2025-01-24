@@ -16,6 +16,9 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import warnings
 import os
+import random
+import time
+
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 def get_time_axis_hour(date_str:str,start_hour:int) -> pd.Series :
@@ -41,19 +44,38 @@ def get_time_axis_hour(date_str:str,start_hour:int) -> pd.Series :
 
 def fetch_spot_data(date_str:str, url:str) -> pd.DataFrame:
     # Fetch the webpage
+
+
+
+    import requests
+    from bs4 import BeautifulSoup
+    import urllib3
+
+    # Disable SSL warnings (if skipping verification)
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    url = 'https://www.epexspot.com/en/market-results?market_area=AT&auction=&trading_date=&delivery_date=2025-01-20&underlying_year=&modality=Continuous&sub_modality=&technology=&data_mode=table&period=&production_period=&product=60'
+
+    session = requests.Session()
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
     }
 
-    # Fetch the webpage
-    response = requests.get(url, headers=headers)
-    response.raise_for_status()  # Raises an HTTPError for bad responses
+    try:
+        # Option 1: Use verify=False (not secure)
+        response = session.get(url, headers=headers, verify=False)
+        # Option 2: Manually specify CA bundle
+        # response = session.get(url, headers=headers, verify='path/to/cacert.pem')
+        # print(session.cookies.get_dict())  # Debug cookies
+        # Parse the HTML content
+        soup = BeautifulSoup(response.text, 'html.parser')
+        # Find the table
+        table = soup.find('table')
+    except requests.exceptions.SSLError as e:
+        raise Exception(f"SSL error: \n{e}")
+    except Exception as e:
+        raise Exception(f"An error occurred: \n{e}")
 
-    # Parse the HTML content
-    soup = BeautifulSoup(response.text, 'html.parser')
-
-    # Find the table - adjust the selector as needed based on the actual table structure
-    table = soup.find('table')
 
     # Convert the table to a DataFrame, if a table is found
     data_frame = pd.read_html(str(table))[0] if table else None
