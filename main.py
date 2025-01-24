@@ -18,6 +18,9 @@ import warnings
 import os
 import random
 import time
+import requests
+from bs4 import BeautifulSoup
+import urllib3
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -44,12 +47,6 @@ def get_time_axis_hour(date_str:str,start_hour:int) -> pd.Series :
 
 def fetch_spot_data(date_str:str, url:str) -> pd.DataFrame:
     # Fetch the webpage
-
-
-
-    import requests
-    from bs4 import BeautifulSoup
-    import urllib3
 
     # Disable SSL warnings (if skipping verification)
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -185,22 +182,30 @@ def get_time_axis_30min(date_str:str):
     return timestamps
 
 def fetch_auction_data(delivery_date_str:str, url:str) -> pd.DataFrame:
+
+    # Disable SSL warnings (if skipping verification)
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    session = requests.Session()
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
     }
 
-    # Fetch the webpage
-    response = requests.get(url, headers=headers)
-    response.raise_for_status()  # Raises an HTTPError for bad responses
-
-    # Parse the HTML content
-    soup = BeautifulSoup(response.text, 'html.parser')
+    try:
+        # Option 1: Use verify=False (not secure)
+        response = session.get(url, headers=headers, verify=False)
+        # Parse the HTML content
+        soup = BeautifulSoup(response.text, 'html.parser')
+    except requests.exceptions.SSLError as e:
+        raise Exception(f"SSL error: \n{e}")
+    except Exception as e:
+        raise Exception(f"An error occurred: \n{e}")
 
     # Initialize a list to hold all rows of data
     data = []
 
     # Find all rows in the table within <tr class="child"> and <tr class="child impair">
-    rows = soup.find_all('tr', class_=["child", "child impair"])
+    rows = soup.find_all('tr', class_=lambda x: x and 'child' in x)
 
     # Iterate through each row and fetch columns
     for row in rows:
@@ -209,7 +214,9 @@ def fetch_auction_data(delivery_date_str:str, url:str) -> pd.DataFrame:
         data.append(cols)  # Add the column data to the list of rows
 
     # Create a DataFrame using the extracted data
-    data_frame = pd.DataFrame(data, columns=['Buy Volume (MWh)', 'Sell Volume (MWh)', 'Volume (MWh)', 'Price (€/MWh)'])
+    data_frame = pd.DataFrame(data, columns=[
+        'Buy Volume (MWh)', 'Sell Volume (MWh)', 'Volume (MWh)', 'Price (€/MWh)'
+    ])
 
     for col in data_frame.columns:
         data_frame[col] = data_frame[col].str.replace(',', '').astype(float)
@@ -312,7 +319,9 @@ def collect_continuous_market_data(start_date, end_date):
         print("\n")
 
 def collect_auction_market_data(start_date, end_date, sub_modality='DayAhead', auction='MRC'):
-    for market_area in ['AT','BE','CH','DE-LU','DK1','DK2','FI','FR','GB','NL','NO1','NO2','NO3','NO4','NO5','PL','SE1','SE2','SE3','SE4']:
+    for market_area in [
+        'AT','BE','CH','DE-LU','DK1','DK2','FI','FR','GB','NL','NO1','NO2','NO3','NO4','NO5','PL','SE1','SE2','SE3','SE4'
+    ]:
         # for market_area in ['NO1','NO2','NO3','NO4','NO5','PL','SE1','SE2','SE3','SE4']:
         df = pd.DataFrame()
         # for market_area in ['NO1']:
@@ -328,6 +337,7 @@ def collect_auction_market_data(start_date, end_date, sub_modality='DayAhead', a
             print(f'auction {sub_modality} | {market_area} | {date} | {trading_date_str} -> {delivery_date_str}')
 
             url = f"https://www.epexspot.com/en/market-data?market_area={market_area}&auction={auction}&trading_date={trading_date_str}&delivery_date={delivery_date_str}&underlying_year=&modality=Auction&sub_modality={sub_modality}&technology=&data_mode=table&period=&production_period="
+
 
             df_i = fetch_auction_data(delivery_date_str,  url=url)
             df = pd.concat([df,df_i])
@@ -357,7 +367,7 @@ if __name__ == '__main__':
     start_date = end_date-timedelta(days=4)
 
     # collect data for continous market
-    collect_continuous_market_data(start_date, end_date)
+    # collect_continuous_market_data(start_date, end_date)
 
     # collect auction data
     collect_auction_market_data(start_date, end_date, sub_modality='DayAhead', auction='MRC')
