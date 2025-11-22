@@ -1,2 +1,3 @@
 pandas>=2.1
 selenium>=4.15
+python-dotenv>=1.0
